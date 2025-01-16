@@ -250,8 +250,16 @@ func HandleConnect(b *tgx.Bot, chatId int64) error {
 func HandleStop(b *tgx.Bot, chatId int64) error {
 	user, exists := userStore.GetUser(chatId)
 
-	if !exists || !user.IsConnected {
+	if !exists || (!user.IsConnected && !user.IsConnecting) {
 		return b.SendMessage(chatId, MessageConnectWithSomeoneFirst)
+	}
+
+	if user.IsConnecting {
+		if err := waitingQueue.RemoveNode(chatId); err != nil {
+			return b.SendMessage(chatId, "Error removing you from the queue. Please try again.")
+		}
+		user.IsConnecting = false
+		return b.SendMessage(chatId, "You have been removed from the connection queue.")
 	}
 
 	if user.IsConnected {
@@ -271,7 +279,9 @@ func HandleStop(b *tgx.Bot, chatId int64) error {
 
 		return b.SendMessage(chatId, MessageChatEnded)
 	}
-	return nil
+
+	// fallback (should not reach here)
+	return b.SendMessage(chatId, MessageConnectWithSomeoneFirst)
 }
 
 func HandleStatus(b *tgx.Bot, chatId int64) error {
